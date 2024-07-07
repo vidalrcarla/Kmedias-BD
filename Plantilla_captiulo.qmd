@@ -1,0 +1,334 @@
+---
+title: "Capítulo 20: Agrupación en clústeres K-Medias"
+subtitle: "Perfil valórico de adultos chilenos" 
+date: last-modified
+date-format: 'DD [de] MMMM, YYYY'
+author: 
+    - name: Pedro Jofré <br> [pedro.jofre_g@mail.udp.cl](pedro.jofre_g@mail.udp.cl]){style="color:blue;"}
+      affiliation: 
+        - name: "Facultad de Ciencias Sociales e Historia <br> Universidad Diego Portales"
+    - name: Esperanza Lara <br> [esperanza.lara_m@mail.udp.cl](esperanza.lara_m@mail.udp.cl]){style="color:blue;"}
+      affiliation: 
+        - name: "Facultad de Ciencias Sociales e Historia <br> Universidad Diego Portales"
+    - name: Francisca Pérez <br> [francisca.perez3@mail.udp.cl](francisca.perez3@mail.udp.cl]){style="color:blue;"}
+      affiliation: 
+        - name: "Facultad de Ciencias Sociales e Historia <br> Universidad Diego Portales"
+    - name: Catalina Soza <br> [catalina.soza1@mail.udp.cl](catalina.soza1@mail.udp.cl]){style="color:blue;"}
+      affiliation: 
+        - name: "Facultad de Ciencias Sociales e Historia <br> Universidad Diego Portales"
+    - name: Carla Vidal <br> [carla.vidal_r@mail.udp.cl](carla.vidal_r@mail.udp.cl]){style="color:blue;"}
+      affiliation: 
+        - name: "Facultad de Ciencias Sociales e Historia <br> Universidad Diego Portales"
+last-modified:
+title-block-banner: true
+format: 
+  html:
+    page-layout: full
+    embed-resources: true
+    smooth-scroll: true
+    fontcolor: black
+    toc: true
+    toc-location: left
+    toc-title: Indice
+    code-copy: true
+    code-link: true
+    code-fold: true
+    code-tools: true
+    code-summary: "Click para ver el código"
+    anchor-sections: true
+    code-overflow: wrap
+    fig-cap-location: top
+csl: apa.csl
+lang: es
+---
+
+```{r}
+#| code-fold: TRUE
+#| warning: false
+#| message: false
+#| results: 'hide'
+# Código de ajustes
+
+rm(list = ls()) # Limpiamos la memoria 
+options(scipen = 999) # Desactivamos la notación científica
+options(knitr.kable.NA = '') # NA en blanco
+
+# Librerías utilizadas
+library(rio)
+library(tidyverse)
+```
+
+Esta es una plantilla para que puedan escribir sus propios capítulos. Más instrucciones para escribir documentos técnicos en: <https://quarto.org/docs/visual-editor/technical.html>
+
+# Capítulo 20: Agrupación en clústeres K-Medias
+
+En la tercera parte de este libro nos centramos en los métodos para reducir la dimensión de nuestro espacio de características *(p)*. Los capítulos restantes se refieren a los métodos para reducir la dimensión de nuestro espacio de observación *(n)*. Estos métodos se conocen comúnmente como métodos de agrupación. Hacer agrupaciones de K-medias es uno de los algoritmos más utilizados para dividir la cantidad de observaciones en un conjunto de K grupos (es decir, K clústeres), donde el número de K (clústeres) es definido y especificado por los investigadores. Realizar clpuesteres de K-Medias, al igual que otros algoritmos de agrupación de datos, clasifica las observaciones en grupos (o conglomerados) mutuamente excluyentes, de modo que las observaciones dentro del mismo conglomerado sean lo más similares entre sí (es decir, alta similitud intraclase), mientras que las observaciones de diferentes conglomerados son lo más diferentes posible (es decir, baja similitud entre clases). En la agrupación por el método de K-Medias, cada clúster es definido por su centro (es decir, centroide) que corresponde a la media de la distancia entre el centro del cluster y sus datos más próximos. El procedimiento utilizado para encontrar estos conglomerados es similar al algoritmo `k-nearest` más cercano (KNN), el cual se discute en el Capítulo 8, aunque sin la necesidad de tener que predecir un valor de respuesta promedio.
+
+## 20.1 Prerequisitos
+
+Para este capítulo usaremos los siguientes paquetes (para esto es necesario tener en cuenta que la función principal para realizar Clústers de K-Medias, `kmeans()`, se encuentra incluida en el paquete **stats** que viene con la instalación básica de R):
+
+```{r}
+#Paquetes de ayuda para realizar el procedimiento
+
+library(dplyr)      #Para manipulación de datos
+library(ggplot2)    #Para visualizar los datos
+library(stringr)    #Para funcionalidad en cadena
+
+#Paquetes de modelamiento de datos
+
+library(cluster)    #Para algoritmos de clusters en general
+library(factoextra) #Para visualizar los resultados del modelamiento de clusters
+
+```
+
+Para ilustrar el concepto de Cluster de K-Medias, usaremos la base de datos base_o, que es corresponde a la base de datos de Adultos a los que se les aplicó la Décima Encuesta Nacional de Juventudes, desarrollada por la INJUV.
+
+```{r}
+##AQUI HAY QUE DESCUBRIR LA FORMA DE COMO PONER LA BASE DE DATOS QUE USAMOS 
+```
+
+## 20.2 Definición de las medidas de distancia
+
+La clasificación de los datos en grupos requiere de algún método para calcular la distancia o la (des)similitud entre cada par de observaciones y su centro.
+
+Hay muchos enfoques para calcular estas distancias; la elección de la medida de distancia es un paso escencial en la agrupación de datos (como lo fue con KNN). Define cómo se calcula la similitud de dos observaciones e influirá en la forma y el tamaño de los clústeres. Recuérdese en la Sección 8.2.1 que los métodos clásicos para las mediciones de distancia son las distancias euclidianas y de Manhattan; sin embargo, existen medidas de distancia alternativas, como las distancias basadas en la correlación, que se utilizan ampliamente para los datos de expresión génica; la medida de la distancia de Gower (que se discute más adelante en la Sección 20.7), que se utiliza comúnmente para conjuntos de datos que contienen características categóricas y ordinales; y la distancia de coseno, que se usa comúnmente en el campo de la minería de textos. Entonces, ¿cómo se decide una medida de distancia en particular? Desafortunadamente, no hay una respuesta directa y entran en juego varias consideraciones.
+
+La distancia euclidiana (es decir, la distancia en línea recta, o en línea recta) es muy sensible a los valores atípicos; cuando existen, pueden sesgar los resultados del conglomerado, lo que da una falsa confianza en la compacidad del conglomerado. Si las entidades siguen una distribución gaussiana aproximada, la distancia euclidiana es una medida razonable para usar. Sin embargo, si sus entidades se desvían significativamente de la normalidad o si simplemente desea ser más robusto con respecto a los valores atípicos existentes, las distancias de Manhattan, Minkowski o Gower suelen ser mejores opciones.
+
+Si está analizando datos sin escala, donde las observaciones pueden tener grandes diferencias de magnitud, pero un comportamiento similar, se prefiere una distancia basada en la correlación. Por ejemplo, supongamos que desea agrupar a los clientes en función de características de compra comunes. Es posible que los clientes de gran volumen y de bajo volumen muestren comportamientos similares; Sin embargo, debido a su magnitud de compra, la escala de los datos puede sesgar los clústeres si no se utiliza una medida de distancia basada en la correlación. La figura 20.1 ilustra este fenómeno en el que las observaciones uno y dos compran cantidades similares de artículos; sin embargo, las observaciones dos y tres tienen una correlación casi perfecta en su comportamiento de compra. Una medida de distancia sin correlación agruparía las observaciones uno y dos, mientras que una medida de distancia basada en la correlación agruparía las observaciones dos y tres.
+
+![Figura 20.1: Las medidas de distancia basadas en la correlación capturarán la correlación entre dos observaciones mejor que una medida de distancia no basada en la correlación; independientemente de las diferencias de magnitud.](https://bradleyboehmke.github.io/HOML/18-kmeans_files/figure-html/correlation-distance-example-1.png)
+
+## 20.3 Definición de clústeres
+
+La idea básica detrás de la agrupación en clústeres k-medias es construir clústeres de modo que se minimice la variación total dentro del clúster. Hay varios algoritmos k-means disponibles para hacer esto. El algoritmo estándar es el algoritmo de Hartigan-Wong (Hartigan y Wong 1979), que define la variación total dentro del conglomerado como la suma de las distancias euclidianas entre los valores de las características de la observación i y el centroide correspondiente:
+
+```{=tex}
+\begin{equation}
+\tag{20.1}
+W\left(C_k\right) = \sum_{x_i \in C_k}\left(x_{i} - \mu_k\right) ^ 2,
+\end{equation}
+```
+Donde: **NO SÉ CÓMO PONER LAS COSAS MATEMÁTICAS BIEN SI ESTÁN SIENDO LISTADAS POR FAVOR REVISAR**
+
+-   $x_i$ es una observación perteneciente al cúmulo $C_k$
+
+-   $\mu_k$ es el valor promedio de los puntos asignados al cluster $C_k$
+
+Cada observación $(x_1)$ se asigna a un conglomerado dado de modo que se minimiza la suma de las distancias al cuadrado (SS) de cada observación a sus centros de conglomerado asignado $(\mu_k)$.
+
+Definimos la variación total dentro del clúster de la siguiente manera:
+
+```{=tex}
+\begin{equation}
+\tag{20.2}
+SS_{within} = \sum^k_{k=1}W\left(C_k\right) = \sum^k_{k=1}\sum_{x_i \in C_k}\left(x_i - \mu_k\right)^2
+\end{equation}
+```
+El $SS\_{within}$ mide la compacidad (es decir, la bondad) de los grupos resultantes y queremos que sea lo más pequeño posible, como se ilustra en la Figura 20.2.
+
+![Figura 20.2: Variación total dentro del conglomerado captura las distancias totales entre el centroide de un conglomerado y las observaciones individuales asignadas a ese conglomerado. Cuanto más compactas son estas distancias, más definidos y aislados están los cúmulos.](https://bradleyboehmke.github.io/HOML/18-kmeans_files/figure-html/kmeans-clusters-good-better-best-1.png)
+
+### Expresiones matemáticas: $y = \beta_0 + \beta_1X_1 + \epsilon$
+
+```{=tex}
+\begin{equation}
+\tag{4.1}
+  Y_i = \beta_0 + \beta_1 X_i + \epsilon_i, \quad \text{for } i = 1, 2, \dots, n,
+\end{equation}
+```
+### Listar elementos:
+
+-   Elemento 1
+-   Elemento 2
+-   Elemento 3
+
+### Enumerar elementos
+
+1.  Elemento 1
+2.  Elemento 2
+    1.  Sub-elemento 2
+3.  Elemento 3
+
+### Incrustar código:
+
+```{r}
+print("Código normal: es un chunk tal cual, sin configuraciones. El código se ejecutará abajo de este.")
+```
+
+Para añadir una configuarción, se debe usar este código:
+
+```         
+#| opcion: valor
+```
+
+Eval: false
+
+Si el propósito es no mostrar el output del código para, se debe usar la opción `eval: FALSE`:
+
+```{r}
+#| eval: FALSE
+
+print("Este código no se ejecuta. Pero sí se muestra.")
+```
+
+Echo: false
+
+Si el propósito es no mostrar el output del código, se debe usar la opción `echo: FALSE`:
+
+```{r}
+#| echo: FALSE
+
+print("Este código no se muestra, pero sí se ejecuta.")
+
+vector_1 <- seq(from = 1, to = 5.5, by = .5)
+vector_2 <- seq(from = 1, to = 20, by = 2)
+vector_3 <- rep(2023, times = 10)
+vector_4 <- rep(c(1,0), each = 5)
+vector_5 <- vector_1 + vector_2
+
+matriz <- cbind(vector_1, vector_2, vector_3, vector_4, vector_5)
+matriz
+```
+
+### Warning y message
+
+Se pueden suprimir los mensajes de "warning" y "message" para obtener una salida más 'limpia'.
+
+-   **Warning:**
+
+```{r}
+vector_1 <- seq(from = 1, to = 5, by = 0.5)
+vector_2 <- seq(from = 1, to = 20, by = 2)
+
+vector_3 <- vector_1 + vector_2
+```
+
+Aplicar warning: false
+
+```{r}
+#| warning: false
+vector_1 <- seq(from = 1, to = 5, by = 0.5)
+vector_2 <- seq(from = 1, to = 20, by = 2)
+
+vector_3 <- vector_1 + vector_2
+```
+
+Aplicar message: false
+
+```{r}
+#| message: false
+library(tidyverse)
+```
+
+### Tablas
+
+### Tabla manual
+
+Puedes usar las herramientas del **menú de edición**.
+
+Las tablas se pueden realizar manualmente en R markdown de la siguiente forma:
+
+```         
+| Columna A | Columna B |
+|:---------:|:---------:|
+| Celda 1   | Celda 2   |
+```
+
+| Columna A | Columna B |
+|:---------:|:---------:|
+|  Celda 1  |  Celda 2  |
+
+### Tablas a partir de código
+
+Para poder armar tablas a partir de código, debes usar la librería `knitr`. La función que usaremos se llama `kable()`.
+
+También, es importante agregar una leyenda con las opciones:
+
+-   `#| label: tbl-pinguinos`. un nombre con el cuál identificar el chunk.
+
+-   `#| tbl-cap: "primeros 5 casos de la base de datos pinguinos"`. Una leyenda o *caption*.
+
+```{r}
+#| label: tbl-pinguinos
+#| tbl-cap: "primeros 5 casos de la base de datos pinguinos"
+
+library(datos)
+library(tidyverse) 
+pinguinos %>% 
+  head() %>% 
+  knitr::kable()
+```
+
+### Imágenes
+
+Para insertar una imágen, se puede usar el menú superior o usar sintaxis:
+
+-   **Archivo local:**
+
+```         
+![Imagen](files/imagen.png)
+```
+
+-   **Archivo en linea:**
+
+```         
+![Imagen](https://d33wubrfki0l68.cloudfront.net/0b4d0569b2ddf6147da90b110fbb2a17653c8b08/f06f3/images/shutterstock/r_vs_rstudio_1.png)
+```
+
+Puedes controlar el ancho y largo de la siguiente forma:
+
+```         
+![Imagen](files/imagen.png){width=300}
+```
+
+Imagen:
+
+![Imagen](https://d33wubrfki0l68.cloudfront.net/0b4d0569b2ddf6147da90b110fbb2a17653c8b08/f06f3/images/shutterstock/r_vs_rstudio_1.png){width="500"}
+
+-   **Método chunk**
+
+Puedes usar la función `include_graphics` para
+
+```{r}
+#| fig.align: 'center'
+
+knitr::include_graphics("files/imagen.png")
+```
+
+Se puede ocultar este bloque de código para que no se vea (echo: false).
+
+Se puede ajustar el ancho y alto de la imagen con las opciones:
+
+-   `fig.width`
+
+-   `fig.height`
+
+### Figuras de gráficos
+
+Para los gráficos, quarto tiene las herramientas para asignar título y leyenda:
+
+-   `label`: asigna un nombre tipo identificador al gráfico. Para indicar que es un gráfico, uso el prefijo `fig-`.
+
+-   `fig-cap`: permite poner un texto tipo leyenda.
+
+-   `fig.width`: ancho de la figura.
+
+-   `fig.height`: alto de la figura.
+
+(Ver código en el archivo .qmd)
+
+```{r}
+#| label: fig-plots
+#| fig-cap: "Un título muy elegnate"
+#| message: FALSE
+#| fig.width: 7
+#| fig.height: 4
+pinguinos %>% 
+  ggplot() + aes(x = isla) +
+  geom_bar() +
+  labs(
+    title = "Islas (pingüinos)"
+  )
+```
